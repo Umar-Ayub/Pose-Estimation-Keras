@@ -71,7 +71,8 @@ def deconvolution_network(x):
                                 padding = 'same',
                                 kernel_regularizer=l2(weight_regularization),
                                 bias_regularizer=l2(weight_regularization),
-                                activation= 'sigmoid')(x)
+                                activation= 'sigmoid',
+                                name = "deconvolution_network_output")(x)
 
     return x
 
