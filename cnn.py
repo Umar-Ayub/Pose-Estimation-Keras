@@ -7,6 +7,8 @@ import cv2
 import numpy as np
 import tensorflow as tf
 import keras.backend as K
+from keras.applications import ResNet50
+from keras.regularizers import l2
 
 
 # Video Dimensions
@@ -16,78 +18,63 @@ frame_height = 224
 frame_width = 224
 frame_channels = 3
 num_bodyparts = 6
+weight_regularization = 0.0001
+
+conv_base = ResNet50(weights = 'imagenet', 
+                      include_top = False, 
+                      input_shape = (frame_height, frame_width, frame_channels))
+
+for layer in conv_base.layers:
+    layer.trainable = False
 
 
 # Network Parameters
 
-cardinality = 1
+# Define Feature Extraction Network
+def convolution_network(x):
+    x = conv_base(x)
+#     x = layers.Flatten()(x)
+#     x = layers.Reshape((112,112,8))(x)
+    return x
+
+
 # Define Deconvolution network to extract heatmaps for each joint position
 
 def deconvolution_network(x):
-    
-    def add_common_layers(y):
-        y = layers.BatchNormalization()(y)
-        y = layers.LeakyReLU()(y)
-        return y
-    
-    def grouped_convolution(y, nb_channels, _strides):
-        if cardinality == 1:
-            return layers.Conv2DTranspose(nb_channels, kernel_size=(3, 3), strides=_strides, padding='same')(y)
-          
-        assert not nb_channels % cardinality
-        _d = nb_channels // cardinality
-        
-        groups = []
-        for j in range(cardinality):
-            group =  layers.Lambda(lambda z: z[:,:,:, j*_d: j*_d + _d])(y)
-            groups.append(layers.Conv2D(_d, kernel_size=(3, 3), strides=_strides, padding='same')(group)) 
-            
-        y = layers.concatenate(groups)
-        
-        return y
-    
-    
-    def deconv_block(y, nb_channels_in, nb_channels_out, _strides=(1, 1)):
-        
-        y = layers.Conv2DTranspose(nb_channels_in, kernel_size=(3, 3), strides=(1, 1), padding='same')(y)
-        y = add_common_layers(y)
-        
-        y = grouped_convolution(y, nb_channels_in, _strides=_strides)
-        y = add_common_layers(y)
-        
-        y = layers.Conv2DTranspose(nb_channels_out, kernel_size=(3,3), strides=(1, 1), padding='valid')(y)
-        y = add_common_layers(y)
-        
-        return y
-    
-    
-    # conv1
-    x = layers.Conv2DTranspose(1024, kernel_size=(5, 5), strides=(1, 1), padding='same')(x)
-    x = add_common_layers(x)
-    
-    # conv2
-    for i in range(1):
-        strides = (2, 2)
-        x = deconv_block(x, 1024, 512, _strides=strides)
-        
-    # conv3
-    for i in range(2):
-        strides = (2, 2)
-        x = deconv_block(x, 512, 256, _strides=strides)
-        
-    # conv3
-    for i in range(1):
-        strides = (2, 2)
-        x = deconv_block(x, 256, 18, _strides=strides)
-        
-    # Refactor into spatial probability maps for each bp
-    x = layers.Flatten()(x)
-    x = layers.Reshape((60492, num_bodyparts))(x)
-    x = layers.Cropping1D((5158,5158))(x)
-    x = layers.Reshape((frame_height, frame_width, num_bodyparts), name = 'deconvolution_network_output')(x)
-    
+    x = layers.Conv2DTranspose(num_bodyparts,
+                                kernel_size=3, 
+                                strides = 2,
+                                padding = 'same',
+                                kernel_regularizer=l2(weight_regularization),
+                                bias_regularizer=l2(weight_regularization))(x)
+    x = layers.Conv2DTranspose(num_bodyparts,
+                                kernel_size=3, 
+                                strides = 2,
+                                padding = 'same',
+                                kernel_regularizer=l2(weight_regularization),
+                                bias_regularizer=l2(weight_regularization))(x)
+    x = layers.Conv2DTranspose(num_bodyparts,
+                                kernel_size=3, 
+                                strides = 2,
+                                padding = 'same',
+                                kernel_regularizer=l2(weight_regularization),
+                                bias_regularizer=l2(weight_regularization))(x)
+    x = layers.Conv2DTranspose(num_bodyparts,
+                                kernel_size=3, 
+                                strides = 2,
+                                padding = 'same',
+                                kernel_regularizer=l2(weight_regularization),
+                                bias_regularizer=l2(weight_regularization))(x)
+    x = layers.Conv2DTranspose(num_bodyparts,
+                                kernel_size=3, 
+                                strides = 2,
+                                padding = 'same',
+                                kernel_regularizer=l2(weight_regularization),
+                                bias_regularizer=l2(weight_regularization),
+                                activation= 'sigmoid')(x)
+
     return x
-        
+
 
 # Spatial Fusion layers that learn dependencies between the joint locations
 
@@ -102,24 +89,18 @@ def spatial_fusion_network(x1, x2):
     
     x1 = layers.Flatten()(x1)
     x = layers.concatenate([x1, x2])
-    x = layers.Reshape((463304, 1))(x)
-    x = layers.Cropping1D((6027,6027))(x)
-    x = layers.Reshape((475,475,2))(x)
+    x = layers.Reshape((224,224,8))(x)
     
     x = layers.Conv2D(nb_channels, kernel_size=(7, 7), strides=_strides, padding='same')(x)
     x = layers.Dropout(0.2)(x)
-    x = layers.Conv2D(nb_channels*2,  kernel_size=(13, 13),strides=(2,2), padding='same')(x)
+    x = layers.Conv2D(nb_channels*2,  kernel_size=(13, 13),strides=_strides, padding='same')(x)
     x = add_common_layers(x)
     x = layers.Conv2D(nb_channels*4,  kernel_size=(13, 13),strides=_strides, padding='same')(x)
     x = layers.Dropout(0.2)(x)
-    
-    x = layers.Cropping2D(cropping=((7, 7), (7, 7)))(x)
-    
-    x = layers.Conv2D(nb_channels*8,  kernel_size=(1, 1),strides=_strides, padding='valid')(x)
+    x = layers.Conv2D(nb_channels*8,  kernel_size=(1, 1),strides=_strides, padding='same')(x)
     x = add_common_layers(x)
-    x = layers.Conv2D(1, kernel_size=(1, 1), strides=_strides, padding='same', name = 'spatial_fusion_output')(x)
+    x = layers.Conv2D(1, kernel_size=(1, 1), strides=_strides, padding='same', name = 'spatial_fusion_output',  activation = 'sigmoid')(x)
     return x
-
 
 # Function to compute optical flow calculations on a list of frames
 def optical_flow(frame_list):    
