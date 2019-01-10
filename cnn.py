@@ -24,8 +24,7 @@ conv_base = ResNet50(weights = 'imagenet',
                       include_top = False, 
                       input_shape = (frame_height, frame_width, frame_channels))
 
-for layer in conv_base.layers:
-    layer.trainable = False
+
 
 
 # Network Parameters
@@ -41,25 +40,25 @@ def convolution_network(x):
 # Define Deconvolution network to extract heatmaps for each joint position
 
 def deconvolution_network(x):
-    x = layers.Conv2DTranspose(num_bodyparts,
+    x = layers.Conv2DTranspose(num_bodyparts*5,
                                 kernel_size=3, 
                                 strides = 2,
                                 padding = 'same',
                                 kernel_regularizer=l2(weight_regularization),
                                 bias_regularizer=l2(weight_regularization))(x)
-    x = layers.Conv2DTranspose(num_bodyparts,
+    x = layers.Conv2DTranspose(num_bodyparts*4,
                                 kernel_size=3, 
                                 strides = 2,
                                 padding = 'same',
                                 kernel_regularizer=l2(weight_regularization),
                                 bias_regularizer=l2(weight_regularization))(x)
-    x = layers.Conv2DTranspose(num_bodyparts,
+    x = layers.Conv2DTranspose(num_bodyparts*3,
                                 kernel_size=3, 
                                 strides = 2,
                                 padding = 'same',
                                 kernel_regularizer=l2(weight_regularization),
                                 bias_regularizer=l2(weight_regularization))(x)
-    x = layers.Conv2DTranspose(num_bodyparts,
+    x = layers.Conv2DTranspose(num_bodyparts*2,
                                 kernel_size=3, 
                                 strides = 2,
                                 padding = 'same',
