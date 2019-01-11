@@ -119,3 +119,20 @@ class Dataset:
 
     def make_second_dataset(self, heatmaps, central_heatmaps):
         return{'x': heatmaps, 'y': central_heatmaps}
+    
+    
+    
+class PoseVideo:
+    def __init__(self, path):
+        self.path = path
+        self.name = self.path.rsplit("\\")[-1].split(".")[0]
+        self.clip = mpy.VideoFileClip(self.path).resize((224,224)) 
+        self.predict_data = np.asarray(self.chop_video_into_frames(self.clip)[:-1])
+        
+    def chop_video_into_frames(self, clip, frames_per_chop=5):
+        # gather all frames into a list
+        frames = [x for x in clip.iter_frames()]
+        
+        # chop into pieces and save as 2D list
+        frames_c = [frames[i * frames_per_chop:(i + 1) * frames_per_chop] for i in range((len(frames) + frames_per_chop - 1) // frames_per_chop )] 
+        return frames_c

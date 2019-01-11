@@ -173,4 +173,49 @@ def optical_flow_network(x):
 
 
 
+def deconvolution_fusion_network(x):
+    x = layers.Conv2DTranspose(num_bodyparts*5,
+                                kernel_size=3, 
+                                strides = 2,
+                                padding = 'same',
+                                kernel_regularizer=l2(weight_regularization),
+                                bias_regularizer=l2(weight_regularization))(x)
+    x = layers.Conv2DTranspose(num_bodyparts*4,
+                                kernel_size=3, 
+                                strides = 2,
+                                padding = 'same',
+                                kernel_regularizer=l2(weight_regularization),
+                                bias_regularizer=l2(weight_regularization))(x)
+    x = layers.Conv2DTranspose(num_bodyparts*3,
+                                kernel_size=3, 
+                                strides = 2,
+                                padding = 'same',
+                                kernel_regularizer=l2(weight_regularization),
+                                bias_regularizer=l2(weight_regularization))(x)
+    x = layers.Conv2DTranspose(num_bodyparts*2,
+                                kernel_size=3, 
+                                strides = 2,
+                                padding = 'same',
+                                kernel_regularizer=l2(weight_regularization),
+                                bias_regularizer=l2(weight_regularization))(x)
+    x = layers.Conv2DTranspose(num_bodyparts,
+                                kernel_size=3, 
+                                strides = 2,
+                                padding = 'same',
+                                kernel_regularizer=l2(weight_regularization),
+                                bias_regularizer=l2(weight_regularization),
+                                activation= 'sigmoid',
+                                name = "same")(x)
+    x = layers.Conv2DTranspose(1,
+                                kernel_size=3, 
+                                strides = 1,
+                                padding = 'same',
+                                kernel_regularizer=l2(weight_regularization),
+                                bias_regularizer=l2(weight_regularization),
+                                activation= 'sigmoid',
+                                name = "deconvolution_fusion_network_output")(x)
+
+    return x
+
+
 
