@@ -218,4 +218,13 @@ def deconvolution_fusion_network(x):
     return x
 
 
-
+def separation_network(x):
+    x = layers.Conv2DTranspose(num_bodyparts,
+                                kernel_size=3, 
+                                strides = 1,
+                                padding = 'same',
+                                kernel_regularizer=l2(weight_regularization),
+                                bias_regularizer=l2(weight_regularization),
+                                activation= 'sigmoid',
+                                name = "deconvolution_network_output")(x)
+    return x
