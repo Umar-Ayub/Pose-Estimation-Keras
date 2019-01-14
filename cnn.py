@@ -219,6 +219,20 @@ def deconvolution_fusion_network(x):
 
 
 def separation_network(x):
+    x = layers.Conv2DTranspose(num_bodyparts*5,
+                                kernel_size=3, 
+                                strides = 1,
+                                padding = 'same',
+                                kernel_regularizer=l2(weight_regularization),
+                                bias_regularizer=l2(weight_regularization),
+                                activation= 'sigmoid')(x)
+    x = layers.Conv2DTranspose(num_bodyparts*2,
+                                kernel_size=3, 
+                                strides = 1,
+                                padding = 'same',
+                                kernel_regularizer=l2(weight_regularization),
+                                bias_regularizer=l2(weight_regularization),
+                                activation= 'sigmoid')(x)
     x = layers.Conv2DTranspose(num_bodyparts,
                                 kernel_size=3, 
                                 strides = 1,
