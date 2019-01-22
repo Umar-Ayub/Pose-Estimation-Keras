@@ -116,36 +116,53 @@ def optical_flow(frame_list):
 
         return flow
 
-    def move_image_based_on_flow(prev_img, flow):
+    def move_image_based_on_flow(img, flow):
         # Generate a cartesian grid
         #         print('prev_img',prev_img.shape)
-        height, width = flow.shape[0], flow.shape[1]
-        R2 = np.dstack(np.meshgrid(np.arange(width), np.arange(height)))
+        # height, width = flow.shape[0], flow.shape[1]
+        #R2 = np.dstack(np.meshgrid(np.arange(width), np.arange(height)))
 
         # desired mapping is simply the addition of this grid with the flow
-        pixel_map = R2 + flow
-        pixel_map = pixel_map.astype(np.float32)
+        #pixel_map = R2 + flow
+        #pixel_map = pixel_map.astype(np.float32)
         
         #perform the remapping of each pixel in the original image
-        warped_frame = cv2.remap(prev_img, pixel_map[:, :, 0], pixel_map[:, :, 1], cv2.INTER_LINEAR)
-        warped_frame = np.expand_dims(warped_frame, axis = -1)
+        #warped_frame = cv2.remap(prev_img, pixel_map[:, :, 0], pixel_map[:, :, 1], cv2.INTER_LINEAR)
+        #warped_frame = np.expand_dims(warped_frame, axis = -1)
         #         print('warped_frame',warped_frame.shape)
+        
+        h, w = flow.shape[:2]
+        flow = -flow
+        flow[:,:,0] += np.arange(w)
+        flow[:,:,1] += np.arange(h)[:,np.newaxis]
+        warped_frame = cv2.remap(img, flow, None, cv2.INTER_LINEAR)
+        warped_frame = np.expand_dims(warped_frame, axis = -1)
         return warped_frame
     
     mid = 2
     base_frame = frame_list[:, mid]
-    new_list = tf.identity(frame_list)
-    new_list = tf.concat((new_list[:,:mid], new_list[:,mid+1:]), axis = 1)
+    
+    new_list = tf.concat((frame_list[:,:mid], frame_list[:,mid+1:]), axis = 1)
     
     warped_frames = []
     for i in range(total_frames-1):
         warped_bps_in_frame = []
         for k in range(num_bodyparts):
-            bp_heatmap = new_list[:, i , :, : , k, np.newaxis]
-            reference_frame = base_frame[:, : , :, k, np.newaxis]
-            flow = tf.py_func(calculate_optical_flow, [reference_frame, bp_heatmap], tf.float32)
-            new_frame = tf.py_func(move_image_based_on_flow, [bp_heatmap, flow], tf.float32)
-            warped_bps_in_frame.append(new_frame)   
+            
+            if i < mid:
+                bp_heatmap = new_list[:, i , :, : , k, np.newaxis]
+                reference_frame = base_frame[:, : , :, k, np.newaxis]
+                flow = tf.py_func(calculate_optical_flow, [bp_heatmap, reference_frame], tf.float32)
+                new_frame = tf.py_func(move_image_based_on_flow, [bp_heatmap, flow], tf.float32)
+                warped_bps_in_frame.append(new_frame) 
+            
+            else:
+                bp_heatmap = new_list[:, i , :, : , k, np.newaxis]
+                reference_frame = base_frame[:, : , :, k, np.newaxis]
+                flow = tf.py_func(calculate_optical_flow, [reference_frame, bp_heatmap], tf.float32)
+                new_frame = tf.py_func(move_image_based_on_flow, [reference_frame, flow], tf.float32)
+                warped_bps_in_frame.append(new_frame) 
+                
         warped_frames.append(warped_bps_in_frame)
 
     base_frame = tf.reshape(base_frame, (6, 224, 224, 1))
@@ -162,14 +179,23 @@ def repeat_target(x):
     return K.repeat_elements(x, total_frames, axis = 0)
 
 def optical_flow_network(x):
-    x = layers.Lambda(expand_dims, output_shape=(total_frames, frame_height, frame_width, num_bodyparts))(x)
-    #     x = layers.Input(batch_shape=(1, total_frames, frame_height, frame_width, num_bodyparts))
+    # x = layers.Lambda(expand_dims, output_shape=(total_frames, frame_height, frame_width, num_bodyparts))(x)
     x = layers.Lambda(optical_flow, output_shape=(num_bodyparts, frame_height, frame_width, total_frames))(x)
-    x = layers.Conv3D(32, kernel_size=(1, 1, 1), padding='same')(x)
-    x = layers.Dropout(0.2)(x)
-    x = layers.Conv3D(1, kernel_size=(1, 1, 1), padding='same')(x)
-    x = layers.Lambda(repeat_target, name = 'optical_flow_output')(x)
+    #x = layers.Conv3D(5, kernel_size=(5, 3, 3), padding='same')(x)
+    x = layers.Conv3D(1, kernel_size=(5, 5, 5), padding='same')(x)
+    x = layers.Reshape(target_shape=(1, frame_height, frame_width, num_bodyparts),name = 'optical_flow_output')(x)
+    # x = layers.Conv3D(32, kernel_size=(1, 1, 1), padding='same')(x)
+    # x = layers.Dropout(0.2)(x)
+    # x = layers.Conv3D(1, kernel_size=(1, 1, 1), padding='same')(x)
+    # x = layers.Lambda(repeat_target, name = 'optical_flow_output')(x)
     return x
+
+def weighted_sampling_layers(x):
+    x = layers.Conv3D(128, kernel_size=(5, 3, 3), padding='same')(x)
+    x = layers.Conv3D(5, kernel_size=(5, 3, 3), padding='same')(x)
+    x = layers.Conv3D(1, kernel_size=(1, 3, 3), padding='same', name = 'optical_flow_output')(x)
+    #x = layers.Lambda(repeat_target, )(x)
+    return(x)
 
 
 
